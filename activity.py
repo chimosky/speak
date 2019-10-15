@@ -80,7 +80,8 @@ import chat
 
 from faceselect import FaceSelector
 
-import espeak
+#import espeak
+import speechl
 
 SERVICE = 'org.sugarlabs.Speak'
 IFACE = SERVICE
@@ -592,8 +593,10 @@ class SpeakActivity(activity.Activity):
         voicebar.insert(separator, -1)
 
         self.pitchadj = Gtk.Adjustment(self.face.status.pitch,
-                                       espeak.PITCH_MIN, espeak.PITCH_MAX,
-                                       1, espeak.PITCH_MAX / 10, 0)
+                                       speechl.PITCH_MIN,
+                                       speechl.PITCH_MAX,
+                                       1,
+                                       speechl.PITCH_MAX / 10, 0)
         pitchbar = Gtk.HScale.new(self.pitchadj)
         pitchbar.set_draw_value(False)
         pitchbar.set_size_request(240, 15)
@@ -602,8 +605,10 @@ class SpeakActivity(activity.Activity):
         voicebar.insert(pitchbar_toolitem, -1)
 
         self.rateadj = Gtk.Adjustment(self.face.status.rate,
-                                      espeak.RATE_MIN, espeak.RATE_MAX,
-                                      1, espeak.RATE_MAX / 10, 0)
+                                      speechl.RATE_MIN,
+                                      speechl.RATE_MAX,
+                                      1,
+                                      speechl.RATE_MAX / 10, 0)
         ratebar = Gtk.HScale.new(self.rateadj)
         ratebar.set_draw_value(False)
         ratebar.set_size_request(240, 15)

@@ -31,7 +31,8 @@ import json
 
 import sugar3.graphics.style as style
 
-import espeak
+#import espeak
+import speechl
 import eye
 import glasses
 import eyelashes
@@ -55,8 +56,8 @@ FACE_PAD = style.GRID_CELL_SIZE
 class Status:
     def __init__(self):
         self.voice = voice.defaultVoice()
-        self.pitch = espeak.PITCH_MAX / 2
-        self.rate = espeak.RATE_MAX / 2
+        self.pitch = speechl.PITCH_MAX / 2
+        self.rate = speechl.RATE_MAX / 2
 
         self.eyes = [eye.Eye] * 2
         self.mouth = mouth.Mouth
@@ -122,7 +123,7 @@ class View(Gtk.EventBox):
 
         self.connect('size-allocate', self._size_allocate_cb)
 
-        self._audio = espeak.AudioGrab()
+        self._audio = speechl.get_speech_manager()
 
         # make an empty box for some eyes
         self._eyes = None
@@ -222,15 +223,15 @@ class View(Gtk.EventBox):
         self.say_notification(voice.friendlyname)
 
     def say(self, something):
-        self._audio.speak(self._peding or self.status, something)
+        self._audio.say_text(something, status=self._peding or self.status)
 
     def say_notification(self, something):
         status = (self._peding or self.status).clone()
         status.voice = voice.defaultVoice()
-        self._audio.speak(status, something)
+        self._audio.say_text(something, status=status)
 
     def shut_up(self):
-        self._audio.stop_sound_device()
+        self._audio.stop()
 
     def _size_allocate_cb(self, widget, allocation):
         self._mouthbox.set_size_request(-1, int(allocation.height / 2.5))

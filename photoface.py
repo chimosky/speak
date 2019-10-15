@@ -29,7 +29,8 @@ import logging
 import sugar3.graphics.style as style
 
 import voice
-import espeak
+#import espeak
+import speechl
 from faceselect import Eye
 from faceselect import Mouth
 
@@ -60,8 +61,8 @@ class Status(object):
 
     def __init__(self):
         self.voice = voice.defaultVoice()
-        self.pitch = espeak.PITCH_MAX / 2
-        self.rate = espeak.RATE_MAX / 2
+        self.pitch = speechl.PITCH_MAX / 2
+        self.rate = speechl.RATE_MAX / 2
 
     def serialize(self):
         success, data = self.pixbuf.save_to_bufferv('png', [], [])
@@ -139,7 +140,7 @@ class View(Gtk.DrawingArea):
         self._look_x = None
         self._look_y = None
 
-        self._audio = espeak.AudioGrab()
+        self._audio = speechl.get_speech_manager()
         self._audio.connect('peak', self.__peak_cb)
         self._pending = None
 
@@ -259,12 +260,12 @@ class View(Gtk.DrawingArea):
         self.say_notification(voice.friendlyname)
 
     def say(self, something):
-        self._audio.speak(self._pending or self.status, something)
+        self._audio.say_text(something, status=self._pending or self.status)
 
     def say_notification(self, something):
         status = (self._pending or self.status).clone()
         status.voice = voice.defaultVoice()
-        self._audio.speak(status, something)
+        self._audio.say_text(something, status=status)
 
     def shut_up(self):
-        self._audio.stop_sound_device()
+        self._audio.stop()

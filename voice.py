@@ -25,7 +25,8 @@ import re
 import os
 from gettext import gettext as _
 
-import espeak
+#import espeak
+import speechl
 import logging
 logger = logging.getLogger('speak')
 
@@ -109,7 +110,8 @@ def allVoices():
     if _allVoices:
         return _allVoices
 
-    for language, name in espeak.voices():
+    speech = speechl.get_speech_manager()
+    for language, name in speech.get_all_voices().items():
         voice = Voice(language, name)
         _allVoices[voice.friendlyname] = voice
 
