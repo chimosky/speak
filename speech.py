@@ -187,183 +187,6 @@ translated_espeak_voices = {
 }
 
 
-class SpeechManager(GObject.GObject):
-
-    __gtype_name__ = 'SpeechManager'
-
-    __gsignals__ = {
-        'play': (GObject.SignalFlags.RUN_FIRST, None, []),
-        'pause': (GObject.SignalFlags.RUN_FIRST, None, []),
-        'stop': (GObject.SignalFlags.RUN_FIRST, None, []),
-        'mark': (GObject.SignalFlags.RUN_FIRST, None, [str]),
-        'peak': (GObject.SignalFlags.RUN_FIRST, None, [GObject.TYPE_PYOBJECT]),
-        'wave': (GObject.SignalFlags.RUN_FIRST, None, [GObject.TYPE_PYOBJECT]),
-        'idle': (GObject.SignalFlags.RUN_FIRST, None, [])
-    }
-
-    MIN_PITCH = -100
-    MAX_PITCH = 100
-
-    MIN_RATE = -100
-    MAX_RATE = 100
-
-    def __init__(self, **kwargs):
-        GObject.GObject.__init__(self, **kwargs)
-        self.player = None
-        if not self.enabled():
-            return
-
-        self.player = GstSpeechPlayer()
-        self.player.connect('play', self._update_state, 'play')
-        self.player.connect('stop', self._update_state, 'stop')
-        self.player.connect('pause', self._update_state, 'pause')
-        self.player.connect('mark', self._mark_cb)
-        self.player.connect('peak', self.connect_peak)
-        self.player.connect('wave', self.connect_wave)
-        self.player.connect('idle', self.connect_idle)
-        self._default_voice_name = self.player.get_default_voice()
-        self._pitch = DEFAULT_PITCH
-        self._rate = DEFAULT_RATE
-        self._is_playing = False
-        self._is_paused = False
-        self._save_timeout_id = -1
-        self.restore()
-
-        self._cb = {}
-        for cb in ['peak', 'wave', 'idle']:
-            self._cb[cb] = None
-
-
-    def enabled(self):
-        return _HAS_GST
-
-    def _update_state(self, player, signal):
-        self._is_playing = (signal == 'play')
-        self._is_paused = (signal == 'pause')
-        self.emit(signal)
-
-    def _mark_cb(self, player, value):
-        self.emit('mark', value)
-
-    def connect_peak(self, cb):
-        self._cb['peak'] = self.connect('peak', cb)
-
-    def connect_wave(self, cb):
-        self._cb['wave'] = self.connect('wave', cb)
-
-    def connect_idle(self, cb):
-        self._cb['idle'] = self.connect('idle', cb)
-
-    def disconnect_all(self):
-        for cb in ['peak', 'wave', 'idle']:
-            hid = self._cb[cb]
-            if hid is not None:
-                self.disconnect(hid)
-                self._cb[cb] = None
-
-    def get_is_playing(self):
-        return self._is_playing
-
-    is_playing = GObject.Property(type=bool, getter=get_is_playing,
-                                  setter=None, default=False)
-
-    def get_is_paused(self):
-        return self._is_paused
-
-    is_paused = GObject.Property(type=bool, getter=get_is_paused,
-                                 setter=None, default=False)
-
-    def get_pitch(self):
-        return self._pitch
-
-    def get_rate(self):
-        return self._rate
-
-    def set_pitch(self, pitch):
-        self._pitch = pitch
-        if self._save_timeout_id != -1:
-            GLib.source_remove(self._save_timeout_id)
-        self._save_timeout_id = GLib.timeout_add(_SAVE_TIMEOUT, self.save)
-
-    def set_rate(self, rate):
-        self._rate = rate
-        if self._save_timeout_id != -1:
-            GLib.source_remove(self._save_timeout_id)
-        self._save_timeout_id = GLib.timeout_add(_SAVE_TIMEOUT, self.save)
-
-    def say_text(self, text, pitch=None, rate=None, lang_code=None, status=None):
-        if pitch is None:
-            pitch = self._pitch
-        if rate is None:
-            rate = self._rate
-        if lang_code is None:
-            voice_name = self._default_voice_name
-        else:
-            voice_name = self.player.get_all_voices()[lang_code]
-
-        if status is not None:
-            pitch = int(status.pitch) - 100
-            rate = int(status.rate) - 100
-
-        if text:
-            logging.debug(
-                'PLAYING %r lang %r pitch %r rate %r',
-                text,
-                voice_name,
-                pitch,
-                rate)
-            self.player.speak(pitch, rate, voice_name, text)
-
-    def say_selected_text(self):
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY)
-        clipboard.request_text(self.__primary_selection_cb, None)
-
-    def pause(self):
-        self.player.pause_sound_device()
-
-    def restart(self):
-        self.player.restart_sound_device()
-
-    def stop(self):
-        self.player.stop_sound_device()
-
-    def __primary_selection_cb(self, clipboard, text, user_data):
-        self.say_text(text)
-
-    def save(self):
-        self._save_timeout_id = -1
-
-        settings = Gio.Settings('org.sugarlabs.speech')
-        settings.set_int('pitch', self._pitch)
-        settings.set_int('rate', self._rate)
-        logging.debug('saving speech configuration pitch %s rate %s',
-                      self._pitch, self._rate)
-        return False
-
-    def restore(self):
-        settings = Gio.Settings('org.sugarlabs.speech')
-        self._pitch = settings.get_int('pitch')
-        self._rate = settings.get_int('rate')
-        logging.debug('loading speech configuration pitch %s rate %s',
-                      self._pitch, self._rate)
-
-    def get_all_voices(self):
-        if self.player:
-            return self.player.get_all_voices()
-        return None
-
-    def get_all_traslated_voices(self):
-        """ deprecated after 0.112, due to method name spelling error """
-        if self.player:
-            return self.player.get_all_translated_voices()
-        return None
-
-    def get_all_translated_voices(self):
-        if self.player:
-            return self.player.get_all_translated_voices()
-        return None
-
-
 class GstSpeechPlayer(GObject.GObject):
 
     __gsignals__ = {
@@ -410,7 +233,7 @@ class GstSpeechPlayer(GObject.GObject):
     def make_pipeline(self, command):
         if self.pipeline is not None:
             self.stop_sound_device()
-            del sclf.pipeline
+            del self.pipeline
 
         # build a pipeline that makes speech
         # and sends it to both the audio output
@@ -575,3 +398,175 @@ class GstSpeechPlayer(GObject.GObject):
         best = voices.get(language_location) or voices.get(language) \
             or 'english'
         return best
+
+class SpeechManager(GstSpeechPlayer):
+
+    __gtype_name__ = 'SpeechManager'
+
+#    __gsignals__ = {
+#        'play': (GObject.SignalFlags.RUN_FIRST, None, []),
+#        'pause': (GObject.SignalFlags.RUN_FIRST, None, []),
+#        'stop': (GObject.SignalFlags.RUN_FIRST, None, []),
+#        'mark': (GObject.SignalFlags.RUN_FIRST, None, [str]),
+#        'peak': (GObject.SignalFlags.RUN_FIRST, None, [GObject.TYPE_PYOBJECT]),
+#        'wave': (GObject.SignalFlags.RUN_FIRST, None, [GObject.TYPE_PYOBJECT]),
+#        'idle': (GObject.SignalFlags.RUN_FIRST, None, [])
+#    }
+
+    MIN_PITCH = -100
+    MAX_PITCH = 100
+
+    MIN_RATE = -100
+    MAX_RATE = 100
+
+    def __init__(self, **kwargs):
+        GstSpeechPlayer.__init__(self, **kwargs)
+        #self.player = None
+        if not self.enabled():
+            return
+
+        #self.player = GstSpeechPlayer()
+        self.connect('play', self._update_state, 'play')
+        self.connect('stop', self._update_state, 'stop')
+        self.connect('pause', self._update_state, 'pause')
+        self.connect('mark', self._mark_cb)
+        self.connect('peak', self.connect_peak)
+        self.connect('wave', self.connect_wave)
+        self.connect('idle', self.connect_idle)
+        self._default_voice_name = self.get_default_voice()
+        self._pitch = DEFAULT_PITCH
+        self._rate = DEFAULT_RATE
+        self._is_playing = False
+        self._is_paused = False
+        self._save_timeout_id = -1
+        self.restore()
+
+        self._cb = {}
+        for cb in ['peak', 'wave', 'idle']:
+            self._cb[cb] = None
+
+
+    def enabled(self):
+        return _HAS_GST
+
+    def _update_state(self, player, signal):
+        self._is_playing = (signal == 'play')
+        self._is_paused = (signal == 'pause')
+        self.emit(signal)
+
+    def _mark_cb(self, player, value):
+        self.emit('mark', value)
+
+    def connect_peak(self, cb=None):
+        self._cb['peak'] = self.connect('peak', cb)
+
+    def connect_wave(self, cb=None):
+        self._cb['wave'] = self.connect('wave', cb)
+
+    def connect_idle(self, cb):
+        self._cb['idle'] = self.connect('idle', cb)
+
+    def disconnect_all(self):
+        for cb in ['peak', 'wave', 'idle']:
+            hid = self._cb[cb]
+            if hid is not None:
+                self.disconnect(hid)
+                self._cb[cb] = None
+
+    def get_is_playing(self):
+        return self._is_playing
+
+    is_playing = GObject.Property(type=bool, getter=get_is_playing,
+                                  setter=None, default=False)
+
+    def get_is_paused(self):
+        return self._is_paused
+
+    is_paused = GObject.Property(type=bool, getter=get_is_paused,
+                                 setter=None, default=False)
+
+    def get_pitch(self):
+        return self._pitch
+
+    def get_rate(self):
+        return self._rate
+
+    def set_pitch(self, pitch):
+        self._pitch = pitch
+        if self._save_timeout_id != -1:
+            GLib.source_remove(self._save_timeout_id)
+        self._save_timeout_id = GLib.timeout_add(_SAVE_TIMEOUT, self.save)
+
+    def set_rate(self, rate):
+        self._rate = rate
+        if self._save_timeout_id != -1:
+            GLib.source_remove(self._save_timeout_id)
+        self._save_timeout_id = GLib.timeout_add(_SAVE_TIMEOUT, self.save)
+
+    def say_text(self, text, pitch=None, rate=None, lang_code=None, status=None):
+        if pitch is None:
+            pitch = self._pitch
+        if rate is None:
+            rate = self._rate
+        if lang_code is None:
+            voice_name = self._default_voice_name
+        else:
+            voice_name = self.get_all_voices()[lang_code]
+
+        if status is not None:
+            pitch = int(status.pitch) - 100
+            rate = int(status.rate) - 100
+
+        if text:
+            logging.debug(
+                'PLAYING %r lang %r pitch %r rate %r',
+                text,
+                voice_name,
+                pitch,
+                rate)
+            self.speak(pitch, rate, voice_name, text)
+
+    def say_selected_text(self):
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY)
+        clipboard.request_text(self.__primary_selection_cb, None)
+
+    def pause(self):
+        self.pause_sound_device()
+
+    def restart(self):
+        self.restart_sound_device()
+
+    def stop(self):
+        self.stop_sound_device()
+
+    def __primary_selection_cb(self, clipboard, text, user_data):
+        self.say_text(text)
+
+    def save(self):
+        self._save_timeout_id = -1
+
+        settings = Gio.Settings('org.sugarlabs.speech')
+        settings.set_int('pitch', self._pitch)
+        settings.set_int('rate', self._rate)
+        logging.debug('saving speech configuration pitch %s rate %s',
+                      self._pitch, self._rate)
+        return False
+
+    def restore(self):
+        settings = Gio.Settings('org.sugarlabs.speech')
+        self._pitch = settings.get_int('pitch')
+        self._rate = settings.get_int('rate')
+        logging.debug('loading speech configuration pitch %s rate %s',
+                      self._pitch, self._rate)
+
+#    def get_all_voices(self):
+#        if self.player:
+#            return self.player.get_all_voices()
+#        return None
+
+#    def get_all_translated_voices(self):
+#        if self.player:
+#            return self.player.get_all_translated_voices()
+#        return None
+
+
